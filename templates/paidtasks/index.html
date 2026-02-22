@@ -1,0 +1,279 @@
+{% extends "base.html" %} {% from "macros.jinja" import window_vars with context %}
+{% block scripts %} {{ window_vars(user) }}
+<script src="{{ static_url_for('paidtasks/static', path='js/index.js') }}"></script>
+{% endblock %}
+{% block page %}
+<div class="row q-col-gutter-md">
+  <div class="col-12">
+    <q-card>
+      <q-card-section>
+        <div class="text-h5">PaidTasks</div>
+        <div class="text-caption text-grey">
+          Create task lists with public payment pages.
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <q-card>
+      <q-card-section>
+        <div class="text-h6">Lists</div>
+      </q-card-section>
+      <q-separator></q-separator>
+      <q-card-section>
+        <q-input
+          dense
+          filled
+          v-model="listForm.name"
+          label="List name"
+        ></q-input>
+        <q-input
+          dense
+          filled
+          v-model="listForm.description"
+          label="Description"
+          class="q-mt-sm"
+        ></q-input>
+        <q-select
+          dense
+          filled
+          emit-value
+          map-options
+          v-model="listForm.wallet_id"
+          :options="walletOptions"
+          label="Wallet for list"
+          class="q-mt-sm"
+        ></q-select>
+        <q-btn
+          color="primary"
+          label="Add list"
+          class="q-mt-sm"
+          @click="createList"
+          :disable="!listForm.name || !listForm.wallet_id"
+        ></q-btn>
+      </q-card-section>
+      <q-separator></q-separator>
+      <q-card-section>
+        <q-table
+          flat
+          dense
+          row-key="id"
+          :rows="lists"
+          :columns="listColumns"
+          :loading="loading"
+          no-data-label="No lists yet"
+        >
+          <template v-slot:body-cell-wallet="props">
+            <q-td
+              :props="props"
+              v-text="walletById[props.row.wallet_id] ? walletById[props.row.wallet_id].label : '—'"
+            >
+            </q-td>
+          </template>
+          <template v-slot:body-cell-public="props">
+            <q-td :props="props">
+              <q-btn
+                flat
+                color="primary"
+                label="Open"
+                :href="publicListUrl(props.row.id)"
+                target="_blank"
+              ></q-btn>
+              <q-btn
+                flat
+                color="grey"
+                icon="edit"
+                class="q-ml-xs"
+                @click="openEditList(props.row)"
+              ></q-btn>
+              <q-btn
+                flat
+                color="negative"
+                icon="delete"
+                class="q-ml-xs"
+                @click="deleteList(props.row)"
+              ></q-btn>
+            </q-td>
+          </template>
+        </q-table>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <q-card>
+      <q-card-section class="row items-center">
+        <div class="text-h6">Tasks</div>
+        <q-space></q-space>
+        <q-btn
+          flat
+          color="grey"
+          icon="refresh"
+          label="Reload"
+          @click="loadAll"
+          :disable="loading"
+        ></q-btn>
+      </q-card-section>
+      <q-separator></q-separator>
+      <q-card-section>
+        <q-input
+          dense
+          filled
+          v-model="taskForm.title"
+          label="Task title"
+        ></q-input>
+        <q-select
+          dense
+          filled
+          emit-value
+          map-options
+          v-model="taskForm.list_id"
+          :options="listOptions"
+          label="List"
+          class="q-mt-sm"
+        ></q-select>
+        <q-input
+          dense
+          filled
+          type="number"
+          min="1"
+          v-model.number="taskForm.cost_sats"
+          label="Cost (sats)"
+          class="q-mt-sm"
+        ></q-input>
+        <q-btn
+          color="primary"
+          label="Add task"
+          class="q-mt-sm"
+          @click="createTask"
+          :disable="!taskForm.title || !taskForm.list_id || !taskForm.cost_sats"
+        ></q-btn>
+      </q-card-section>
+      <q-separator></q-separator>
+      <q-card-section>
+        <q-table
+          flat
+          dense
+          row-key="id"
+          :rows="tasks"
+          :columns="taskColumns"
+          :loading="loading"
+          no-data-label="No tasks yet"
+        >
+          <template v-slot:body-cell-list="props">
+            <q-td :props="props" v-text="listById[props.row.list_id] ? listById[props.row.list_id].name : '—'">
+            </q-td>
+          </template>
+          <template v-slot:body-cell-paid="props">
+            <q-td :props="props" class="text-right">
+              <q-chip
+                dense
+                :color="paidMap[props.row.id] ? 'positive' : 'grey-4'"
+                :text-color="paidMap[props.row.id] ? 'white' : 'grey-9'"
+                v-text="paidMap[props.row.id] ? 'Paid' : 'Unpaid'"
+              >
+              </q-chip>
+            </q-td>
+          </template>
+          <template v-slot:body-cell-cost="props">
+            <q-td :props="props" class="text-right">
+              <div v-text="props.row.cost_sats"></div>
+              <q-btn
+                flat
+                color="grey"
+                icon="edit"
+                size="sm"
+                class="q-ml-xs"
+                @click="openEditTask(props.row)"
+              ></q-btn>
+              <q-btn
+                flat
+                color="negative"
+                icon="delete"
+                size="sm"
+                class="q-ml-xs"
+                @click="deleteTask(props.row)"
+              ></q-btn>
+            </q-td>
+          </template>
+        </q-table>
+      </q-card-section>
+    </q-card>
+  </div>
+</div>
+
+<q-dialog v-model="editListDialog">
+  <q-card class="q-pa-lg lnbits__dialog-card" style="min-width: 350px;">
+    <q-card-section>
+      <div class="text-h6">Edit list</div>
+      <q-input
+        dense
+        filled
+        v-model="editList.name"
+        label="List name"
+        class="q-mt-sm"
+      ></q-input>
+      <q-input
+        dense
+        filled
+        v-model="editList.description"
+        label="Description"
+        class="q-mt-sm"
+      ></q-input>
+      <q-select
+        dense
+        filled
+        emit-value
+        map-options
+        v-model="editList.wallet_id"
+        :options="walletOptions"
+        label="Wallet for list"
+        class="q-mt-sm"
+      ></q-select>
+    </q-card-section>
+    <q-card-actions align="right">
+      <q-btn flat color="grey" label="Cancel" @click="editListDialog = false"></q-btn>
+      <q-btn color="primary" label="Save" @click="saveEditList"></q-btn>
+    </q-card-actions>
+  </q-card>
+</q-dialog>
+
+<q-dialog v-model="editTaskDialog">
+  <q-card class="q-pa-lg lnbits__dialog-card" style="min-width: 350px;">
+    <q-card-section>
+      <div class="text-h6">Edit task</div>
+      <q-input
+        dense
+        filled
+        v-model="editTask.title"
+        label="Task title"
+        class="q-mt-sm"
+      ></q-input>
+      <q-select
+        dense
+        filled
+        emit-value
+        map-options
+        v-model="editTask.list_id"
+        :options="listOptions"
+        label="List"
+        class="q-mt-sm"
+      ></q-select>
+      <q-input
+        dense
+        filled
+        type="number"
+        min="1"
+        v-model.number="editTask.cost_sats"
+        label="Cost (sats)"
+        class="q-mt-sm"
+      ></q-input>
+    </q-card-section>
+    <q-card-actions align="right">
+      <q-btn flat color="grey" label="Cancel" @click="editTaskDialog = false"></q-btn>
+      <q-btn color="primary" label="Save" @click="saveEditTask"></q-btn>
+    </q-card-actions>
+  </q-card>
+</q-dialog>
+{% endblock %}

@@ -1,0 +1,212 @@
+{% extends "public.html" %} {% block page %}
+<div class="row justify-center">
+  <div class="col-12 col-md-8">
+    <q-card>
+      <q-card-section>
+        <div class="text-h5" v-text="listTitle"></div>
+        <div class="text-caption text-grey" v-text="listDescription"></div>
+      </q-card-section>
+      <q-separator></q-separator>
+      <q-card-section>
+        <q-list bordered separator>
+          <q-item v-for="task in tasks" :key="task.id" clickable>
+            <q-item-section>
+              <q-item-label v-text="task.title"></q-item-label>
+              <q-item-label caption v-text="`Cost: ${task.cost_sats} sats`"></q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-btn
+                color="primary"
+                label="Pay"
+                @click="openInvoice(task)"
+                :disable="paidMap[task.id]"
+              ></q-btn>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <div v-if="!tasks.length" class="text-caption text-grey q-mt-md">
+          No tasks in this list yet.
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
+</div>
+
+<q-dialog v-model="showInvoice" position="top">
+  <q-card class="q-pa-lg lnbits__dialog-card">
+    <q-card-section>
+      <div v-if="invoice">
+        <lnbits-qrcode
+          :value="'lightning:' + invoice.payment_request.toUpperCase()"
+          :href="'lightning:' + invoice.payment_request"
+        ></lnbits-qrcode>
+      </div>
+      <div v-else>
+        <q-spinner-bars color="primary" size="2.55em"></q-spinner-bars>
+      </div>
+    </q-card-section>
+    <q-card-actions align="right">
+      <q-btn flat color="grey" label="Close" @click="showInvoice = false"></q-btn>
+    </q-card-actions>
+  </q-card>
+</q-dialog>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const listIdRaw = {{ key | tojson | safe }}
+  const listId = Number(listIdRaw)
+  const EXT_ID = 'paidtasks'
+  const lnbitsUtils = window._lnbitsUtils
+  window.app = Vue.createApp({
+    el: '#vue',
+    mixins: [windowMixin],
+    data() {
+      return {
+        listTitle: 'Task List',
+        listDescription: '',
+        tasks: [],
+        paidMap: {},
+        paidSockets: {},
+        showInvoice: false,
+        invoice: null,
+        invoiceWs: null
+      }
+    },
+    methods: {
+      copyInvoice() {
+        if (!this.invoice || !this.invoice.payment_request) return
+        try {
+          if (lnbitsUtils) {
+            lnbitsUtils.copyText(this.invoice.payment_request)
+            return
+          }
+        } catch {}
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(this.invoice.payment_request).catch(() => {})
+        }
+      },
+      parseJsonValue(value, fallback) {
+        if (value === null || value === undefined || value === '') return fallback
+        try {
+          return JSON.parse(value)
+        } catch (err) {
+          return fallback
+        }
+      },
+      async fetchPublic(key) {
+        const res = await fetch(`/${EXT_ID}/api/v1/public/kv/${key}`)
+        if (!res.ok) return null
+        const data = await res.json()
+        return data?.value ?? null
+      },
+      async loadData() {
+        const [listsValue, tasksValue] = await Promise.all([
+          this.fetchPublic('public_lists'),
+          this.fetchPublic('public_tasks')
+        ])
+        const lists = this.parseJsonValue(listsValue, [])
+        const tasks = this.parseJsonValue(tasksValue, [])
+        const list = lists.find(l => l.id === listId || String(l.id) === String(listIdRaw))
+        if (list) {
+          this.listTitle = list.name
+          this.listDescription = list.description
+        }
+        this.tasks = tasks.filter(t => t.list_id === listId || String(t.list_id) === String(listIdRaw))
+        this.connectPaidSockets()
+      },
+      connectPaidSockets() {
+        Object.values(this.paidSockets).forEach(ws => {
+          try {
+            ws.close()
+          } catch {}
+        })
+        this.paidSockets = {}
+        this.tasks.forEach(task => {
+          const url = new URL(window.location)
+          url.protocol = url.protocol === 'https:' ? 'wss' : 'ws'
+          url.pathname = `/api/v1/ws/paidtasks:task_paid:${task.id}`
+          const ws = new WebSocket(url)
+          this.paidSockets[task.id] = ws
+          ws.addEventListener('message', () => {
+            this.paidMap = {...this.paidMap, [task.id]: true}
+          })
+          ws.addEventListener('error', () => {
+            try {
+              ws.close()
+            } catch {}
+          })
+        })
+      },
+      async openInvoice(task) {
+        this.showInvoice = true
+        this.invoice = null
+        const tag = `paidtasks:task:${task.id}`
+        try {
+          const res = await fetch(`/${EXT_ID}/api/v1/public/call/public_create_invoice`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({
+                raw: String(task.id),
+                watch: {
+                  store_key: `task_paid:${task.id}`,
+                  tag,
+                  handler: 'notify_paid'
+                }
+              })
+          })
+          if (!res.ok) throw new Error('Failed to create invoice')
+          let data = await res.json()
+          if (data && data.raw) {
+            try {
+              data = JSON.parse(data.raw)
+            } catch {
+              data = {error: 'Invalid invoice response'}
+            }
+          }
+          if (data && data.error) {
+            throw new Error(data.error)
+          }
+          this.invoice = data
+          if (data && data.payment_hash) {
+            this.listenForPayment(data.payment_hash)
+          }
+        } catch (err) {
+          Quasar.Notify.create({type: 'negative', message: 'Could not create invoice'})
+          this.showInvoice = false
+        }
+      },
+      listenForPayment(paymentHash) {
+        if (this.invoiceWs) {
+          try {
+            this.invoiceWs.close()
+          } catch {}
+        }
+        const url = new URL(window.location)
+        url.protocol = url.protocol === 'https:' ? 'wss' : 'ws'
+        url.pathname = `/api/v1/ws/${paymentHash}`
+        const ws = new WebSocket(url)
+        this.invoiceWs = ws
+        ws.addEventListener('message', ({data}) => {
+          const payment = JSON.parse(data)
+          if (payment.pending === false) {
+            ws.close()
+            this.invoiceWs = null
+            this.showInvoice = false
+            Quasar.Notify.create({type: 'positive', message: 'Payment received'})
+          }
+        })
+        ws.addEventListener('error', () => {
+          try {
+            ws.close()
+          } catch {}
+        })
+      }
+    },
+    mounted() {
+      this.loadData()
+    }
+  })
+</script>
+{% endblock %}

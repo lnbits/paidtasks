@@ -1,0 +1,39 @@
+{
+  "name": "PaidTasks",
+  "id": "paidtasks",
+  "short_description": "Create task lists with paid tasks and public payment pages",
+  "tile": "/paidtasks/static/image/paidtasks.svg",
+  "version": "0.0.1",
+  "min_lnbits_version": "1.1.0",
+  "extension_type": "wasm",
+  "contributors": [
+    {
+      "name": "LNbits community",
+      "uri": "https://t.me/lnbits",
+      "role": "Community"
+    }
+  ],
+  "description_md": "https://raw.githubusercontent.com/lnbits/paidtasks/main/description.md",
+  "terms_and_conditions_md": "https://raw.githubusercontent.com/lnbits/paidtasks/main/toc.md",
+  "public_kv_keys": ["public_lists", "public_tasks"],
+  "public_wasm_functions": ["public_create_invoice", "public_task_status", "notify_paid", "noop"],
+  "kv_schema": {},
+  "permissions": [
+    {
+      "id": "ext.db.read_write",
+      "label": "Access extension database",
+      "description": "Read and write data in the paidtasks extension database."
+    },
+    {
+      "id": "api.POST:/api/v1/payments",
+      "label": "Create or pay invoices",
+      "description": "Call POST /api/v1/payments to create or pay invoices."
+    },
+    {
+      "id": "ext.payments.watch",
+      "label": "Watch invoice payments",
+      "description": "Register a backend watcher for a payment hash."
+    }
+  ],
+  "license": "MIT"
+}
