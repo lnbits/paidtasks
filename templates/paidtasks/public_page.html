@@ -142,7 +142,7 @@
       async openInvoice(task) {
         this.showInvoice = true
         this.invoice = null
-        const tag = `paidtasks:task:${task.id}`
+        const tag = 'paidtasks'
         try {
           const res = await fetch(`/${EXT_ID}/api/v1/public/call/public_create_invoice`, {
             method: 'POST',

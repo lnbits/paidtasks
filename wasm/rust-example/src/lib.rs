@@ -24,39 +24,37 @@ extern "C" {
         out_ptr: *mut u8,
         out_len: i32,
     ) -> i32;
-    fn ws_publish(topic_ptr: *const u8, topic_len: i32, data_ptr: *const u8, data_len: i32) -> i32;
 }
 
 const KEY_PUBLIC_REQUEST: &[u8] = b"public_request";
 const KEY_PUBLIC_RESPONSE: &[u8] = b"public_response";
 const PREFIX_TASK_COST: &[u8] = b"task_cost:";
 const PREFIX_TASK_LIST: &[u8] = b"task_list:";
-const PREFIX_TASK_PAID: &[u8] = b"task_paid:";
 const PREFIX_LIST_WALLET: &[u8] = b"list_wallet_inkey:";
-const WS_PREFIX: &[u8] = b"paidtasks:";
-const WS_SUFFIX: &[u8] = b"task_paid:";
 
 const HTTP_METHOD: &[u8] = b"POST";
 const HTTP_PATH: &[u8] = b"/api/v1/payments";
 const BODY_PREFIX: &[u8] = b"{\"out\":false,\"amount\":";
-const BODY_MID: &[u8] = b",\"unit\":\"sat\",\"memo\":\"Paid task\",\"extra\":{\"tag\":\"paidtasks:task:\"";
-const BODY_SUFFIX: &[u8] = b"\"}}";
-const PAID_TRUE_JSON: &[u8] = b"{\"paid\":true}";
-const PAID_FALSE_JSON: &[u8] = b"{\"paid\":false}";
+const BODY_MID: &[u8] = b",\"unit\":\"sat\",\"memo\":\"Paid task\",\"extra\":{\"tag\":\"paidtasks\"}}";
+const ERROR_INVALID_TASK: &[u8] = b"{\"error\":\"Invalid task\"}";
 
 #[no_mangle]
 pub extern "C" fn public_create_invoice(_request_id: i32) -> i32 {
     let (task_id, task_len) = read_public_request();
     if task_len <= 0 {
-        let _ = write_response(PAID_FALSE_JSON);
+        let _ = write_response(ERROR_INVALID_TASK);
         return 0;
     }
 
     let (cost, cost_len) = read_key_bytes(PREFIX_TASK_COST, task_id, task_len, 32);
     let (list_id, list_len) = read_key_bytes(PREFIX_TASK_LIST, task_id, task_len, 32);
     let (inkey, inkey_len) = read_secret_bytes(PREFIX_LIST_WALLET, list_id, list_len, 96);
+    if cost_len <= 0 || list_len <= 0 || inkey_len <= 0 {
+        let _ = write_response(ERROR_INVALID_TASK);
+        return 0;
+    }
 
-    let (body, body_len) = build_body(cost, cost_len, task_id, task_len);
+    let (body, body_len) = build_body(cost, cost_len);
 
     let mut response = [0u8; 4096];
     let resp_len = unsafe {
@@ -75,42 +73,6 @@ pub extern "C" fn public_create_invoice(_request_id: i32) -> i32 {
     };
 
     let _ = write_response(&response[..resp_len.max(0) as usize]);
-    0
-}
-
-#[no_mangle]
-pub extern "C" fn public_task_status(_request_id: i32) -> i32 {
-    let (task_id, task_len) = read_public_request();
-    if task_len <= 0 {
-        let _ = write_response(PAID_FALSE_JSON);
-        return 0;
-    }
-
-    let (_paid_buf, paid_len) = read_key_bytes(PREFIX_TASK_PAID, task_id, task_len, 32);
-    if paid_len <= 0 {
-        let _ = write_response(PAID_FALSE_JSON);
-    } else {
-        let _ = write_response(PAID_TRUE_JSON);
-    }
-    0
-}
-
-#[no_mangle]
-pub extern "C" fn notify_paid(_request_id: i32) -> i32 {
-    let (task_id, task_len) = read_public_request();
-    if task_len <= 0 {
-        return 0;
-    }
-
-    let (topic, topic_len) = build_ws_topic(task_id, task_len);
-    unsafe {
-        ws_publish(
-            topic.as_ptr(),
-            topic_len,
-            PAID_TRUE_JSON.as_ptr(),
-            PAID_TRUE_JSON.len() as i32,
-        );
-    }
     0
 }
 
@@ -176,24 +138,13 @@ fn read_secret_bytes(prefix: &[u8], suffix: [u8; 64], suffix_len: i32, out_len: 
     if len <= 0 { ([0u8; 96], 0) } else { (out, len) }
 }
 
-fn build_body(cost: [u8; 64], cost_len: i32, task_id: [u8; 64], task_len: i32) -> ([u8; 256], i32) {
+fn build_body(cost: [u8; 64], cost_len: i32) -> ([u8; 256], i32) {
     let mut body = [0u8; 256];
     let mut len = 0usize;
     len += write_bytes(&mut body[len..], BODY_PREFIX);
     len += write_bytes(&mut body[len..], &cost[..cost_len.max(0) as usize]);
     len += write_bytes(&mut body[len..], BODY_MID);
-    len += write_bytes(&mut body[len..], &task_id[..task_len.max(0) as usize]);
-    len += write_bytes(&mut body[len..], BODY_SUFFIX);
     (body, len as i32)
-}
-
-fn build_ws_topic(task_id: [u8; 64], task_len: i32) -> ([u8; 128], i32) {
-    let mut buf = [0u8; 128];
-    let mut len = 0usize;
-    len += write_bytes(&mut buf[len..], WS_PREFIX);
-    len += write_bytes(&mut buf[len..], WS_SUFFIX);
-    len += write_bytes(&mut buf[len..], &task_id[..task_len.max(0) as usize]);
-    (buf, len as i32)
 }
 
 fn write_key_buf(out: &mut [u8], prefix: &[u8], suffix: &[u8; 64], suffix_len: usize) -> usize {

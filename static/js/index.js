@@ -84,6 +84,7 @@ window.app = Vue.createApp({
 
       for (const list of this.lists) {
         if (!this.isSafeId(list.id)) {
+          const oldId = list.id
           const newId = this.makeId()
           listIdMap.set(list.id, newId)
           list.id = newId
@@ -95,7 +96,7 @@ window.app = Vue.createApp({
               await this.secretSet(`list_wallet_inkey:${newId}`, wallet.inkey)
             }
           }
-          await this.secretDelete(`list_wallet_inkey:${list.id}`)
+          await this.secretDelete(`list_wallet_inkey:${oldId}`)
         }
       }
 
@@ -372,10 +373,30 @@ window.app = Vue.createApp({
         await this.loadListsAndTasks()
         await this.loadPaidStatuses()
         this.connectPaidSockets()
+        await this.ensureTagWatch()
       } catch (err) {
         LNbits.utils.notifyApiError(err)
       } finally {
         this.loading = false
+      }
+    },
+    async ensureTagWatch() {
+      const wallet = this.walletOptions[0]
+      if (!wallet || !wallet.inkey) return
+      try {
+        await LNbits.api.request(
+          'POST',
+          `/${EXT_ID}/api/v1/watch_tag`,
+          wallet.inkey,
+          {
+            tag: 'paidtasks',
+            wallet_id: wallet.value,
+            handler: 'noop',
+            store_key: 'tag:paidtasks:last_payment'
+          }
+        )
+      } catch (err) {
+        // ignore if not permitted or not granted yet
       }
     }
   },

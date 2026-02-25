@@ -2,14 +2,12 @@
 
 Exports:
 - `public_create_invoice(request_id)`
-- `public_task_status(request_id)`
-- `notify_paid(request_id)`
+- `noop()`
 
 Uses:
 - `db_get` / `db_set`
 - `db_secret_get`
 - `http_request`
-- `ws_publish`
 
 Build:
 
