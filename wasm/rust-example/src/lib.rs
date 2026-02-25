@@ -39,7 +39,8 @@ const WS_SUFFIX: &[u8] = b"task_paid:";
 const HTTP_METHOD: &[u8] = b"POST";
 const HTTP_PATH: &[u8] = b"/api/v1/payments";
 const BODY_PREFIX: &[u8] = b"{\"out\":false,\"amount\":";
-const BODY_SUFFIX: &[u8] = b",\"unit\":\"sat\",\"memo\":\"Paid task\"}";
+const BODY_MID: &[u8] = b",\"unit\":\"sat\",\"memo\":\"Paid task\",\"extra\":{\"tag\":\"paidtasks:task:\"";
+const BODY_SUFFIX: &[u8] = b"\"}}";
 const PAID_TRUE_JSON: &[u8] = b"{\"paid\":true}";
 const PAID_FALSE_JSON: &[u8] = b"{\"paid\":false}";
 
@@ -55,7 +56,7 @@ pub extern "C" fn public_create_invoice(_request_id: i32) -> i32 {
     let (list_id, list_len) = read_key_bytes(PREFIX_TASK_LIST, task_id, task_len, 32);
     let (inkey, inkey_len) = read_secret_bytes(PREFIX_LIST_WALLET, list_id, list_len, 96);
 
-    let (body, body_len) = build_body(cost, cost_len);
+    let (body, body_len) = build_body(cost, cost_len, task_id, task_len);
 
     let mut response = [0u8; 4096];
     let resp_len = unsafe {
@@ -175,11 +176,13 @@ fn read_secret_bytes(prefix: &[u8], suffix: [u8; 64], suffix_len: i32, out_len: 
     if len <= 0 { ([0u8; 96], 0) } else { (out, len) }
 }
 
-fn build_body(cost: [u8; 64], cost_len: i32) -> ([u8; 256], i32) {
+fn build_body(cost: [u8; 64], cost_len: i32, task_id: [u8; 64], task_len: i32) -> ([u8; 256], i32) {
     let mut body = [0u8; 256];
     let mut len = 0usize;
     len += write_bytes(&mut body[len..], BODY_PREFIX);
     len += write_bytes(&mut body[len..], &cost[..cost_len.max(0) as usize]);
+    len += write_bytes(&mut body[len..], BODY_MID);
+    len += write_bytes(&mut body[len..], &task_id[..task_len.max(0) as usize]);
     len += write_bytes(&mut body[len..], BODY_SUFFIX);
     (body, len as i32)
 }

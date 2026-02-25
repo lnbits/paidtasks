@@ -178,6 +178,8 @@ window.app = Vue.createApp({
       await this.remapUnsafeIds()
       await this.ensureTaskKeys()
       await this.ensureListSecrets()
+      await this.saveLists()
+      await this.saveTasks()
     },
     async ensureTaskKeys() {
       await Promise.all(

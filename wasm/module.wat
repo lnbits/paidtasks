@@ -20,6 +20,7 @@
   (data (i32.const 320) ",\"unit\":\"sat\",\"memo\":\"Paid task\"}")
   (data (i32.const 392) "{\"paid\":true}")
   (data (i32.const 424) "{\"paid\":false}")
+  (data (i32.const 456) "{\"error\":\"Invalid task\"}")
 
   (func $memcpy (param $dst i32) (param $src i32) (param $len i32)
     local.get $dst
@@ -119,10 +120,9 @@
     ;; store response in public_response
     i32.const 32
     i32.const 15
-    i32.const 700
     local.get $paid_len
     i32.eqz
-    if
+    if (result i32 i32)
       i32.const 424
       i32.const 16
     else
@@ -168,6 +168,18 @@
     i32.const 32
     call $db_get
     local.set $cost_len
+    local.get $cost_len
+    i32.eqz
+    if
+      i32.const 32
+      i32.const 15
+    i32.const 456
+    i32.const 24
+      call $db_set
+      drop
+      i32.const 0
+      return
+    end
 
     ;; build task_list:<task_id>
     i32.const 80
@@ -187,6 +199,18 @@
     i32.const 32
     call $db_get
     local.set $list_len
+    local.get $list_len
+    i32.eqz
+    if
+      i32.const 32
+      i32.const 15
+    i32.const 456
+    i32.const 24
+      call $db_set
+      drop
+      i32.const 0
+      return
+    end
 
     ;; build list_wallet_inkey:<list_id>
     i32.const 96
@@ -206,6 +230,18 @@
     i32.const 96
     call $db_secret_get
     local.set $inkey_len
+    local.get $inkey_len
+    i32.eqz
+    if
+      i32.const 32
+      i32.const 15
+    i32.const 456
+    i32.const 24
+      call $db_set
+      drop
+      i32.const 0
+      return
+    end
 
     ;; build body prefix + cost + suffix
     i32.const 1000
