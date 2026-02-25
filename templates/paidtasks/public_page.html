@@ -12,7 +12,10 @@
           <q-item v-for="task in tasks" :key="task.id" clickable>
             <q-item-section>
               <q-item-label v-text="task.title"></q-item-label>
-              <q-item-label caption v-text="`Cost: ${task.cost_sats} sats`"></q-item-label>
+              <q-item-label
+                caption
+                v-text="`Cost: ${task.cost_sats} sats`"
+              ></q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-btn
@@ -46,14 +49,17 @@
       </div>
     </q-card-section>
     <q-card-actions align="right">
-      <q-btn flat color="grey" label="Close" @click="showInvoice = false"></q-btn>
+      <q-btn
+        flat
+        color="grey"
+        label="Close"
+        @click="showInvoice = false"
+      ></q-btn>
     </q-card-actions>
   </q-card>
 </q-dialog>
 
-{% endblock %}
-
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <script>
   const listIdRaw = {{ key | tojson | safe }}
   const listId = Number(listIdRaw)

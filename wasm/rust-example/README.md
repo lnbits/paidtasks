@@ -1,10 +1,12 @@
 # Rust example (PaidTasks)
 
 Exports:
+
 - `public_create_invoice(request_id)`
 - `noop()`
 
 Uses:
+
 - `db_get` / `db_set`
 - `db_secret_get`
 - `http_request`

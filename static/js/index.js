@@ -53,7 +53,12 @@ window.app = Vue.createApp({
     listColumns() {
       return [
         {name: 'name', label: 'Name', field: 'name', align: 'left'},
-        {name: 'description', label: 'Description', field: 'description', align: 'left'},
+        {
+          name: 'description',
+          label: 'Description',
+          field: 'description',
+          align: 'left'
+        },
         {name: 'wallet', label: 'Wallet', field: 'wallet_id', align: 'left'},
         {name: 'public', label: 'Public', field: 'id', align: 'right'}
       ]
@@ -62,7 +67,12 @@ window.app = Vue.createApp({
       return [
         {name: 'title', label: 'Task', field: 'title', align: 'left'},
         {name: 'list', label: 'List', field: 'list_id', align: 'left'},
-        {name: 'cost', label: 'Cost (sats)', field: 'cost_sats', align: 'right'},
+        {
+          name: 'cost',
+          label: 'Cost (sats)',
+          field: 'cost_sats',
+          align: 'right'
+        },
         {name: 'paid', label: 'Paid', field: 'id', align: 'right'}
       ]
     }
@@ -91,7 +101,9 @@ window.app = Vue.createApp({
           listsChanged = true
 
           if (list.wallet_id) {
-            const wallet = this.walletOptions.find(w => w.value === list.wallet_id)
+            const wallet = this.walletOptions.find(
+              w => w.value === list.wallet_id
+            )
             if (wallet) {
               await this.secretSet(`list_wallet_inkey:${newId}`, wallet.inkey)
             }
@@ -196,7 +208,9 @@ window.app = Vue.createApp({
       await Promise.all(
         this.lists.map(async list => {
           if (!list.wallet_id) return
-          const wallet = this.walletOptions.find(w => w.value === list.wallet_id)
+          const wallet = this.walletOptions.find(
+            w => w.value === list.wallet_id
+          )
           if (!wallet) return
           await this.secretSet(`list_wallet_inkey:${list.id}`, wallet.inkey)
         })
@@ -271,7 +285,8 @@ window.app = Vue.createApp({
       this.editListDialog = true
     },
     async saveEditList() {
-      if (!this.editList || !this.editList.name || !this.editList.wallet_id) return
+      if (!this.editList || !this.editList.name || !this.editList.wallet_id)
+        return
       const idx = this.lists.findIndex(l => l.id === this.editList.id)
       if (idx !== -1) {
         this.lists.splice(idx, 1, {
@@ -280,9 +295,14 @@ window.app = Vue.createApp({
           description: (this.editList.description || '').trim(),
           wallet_id: this.editList.wallet_id
         })
-        const wallet = this.walletOptions.find(w => w.value === this.lists[idx].wallet_id)
+        const wallet = this.walletOptions.find(
+          w => w.value === this.lists[idx].wallet_id
+        )
         if (wallet) {
-          await this.secretSet(`list_wallet_inkey:${this.lists[idx].id}`, wallet.inkey)
+          await this.secretSet(
+            `list_wallet_inkey:${this.lists[idx].id}`,
+            wallet.inkey
+          )
         }
         await this.saveLists()
       }
@@ -304,16 +324,23 @@ window.app = Vue.createApp({
       await this.saveTasks()
       await this.secretDelete(`list_wallet_inkey:${list.id}`)
       await Promise.all(
-        removedTasks.map(t => Promise.all([
-          this.kvSet(`task_cost:${t.id}`, ''),
-          this.kvSet(`task_list:${t.id}`, ''),
-          this.kvSet(`task_paid:${t.id}`, '')
-        ]))
+        removedTasks.map(t =>
+          Promise.all([
+            this.kvSet(`task_cost:${t.id}`, ''),
+            this.kvSet(`task_list:${t.id}`, ''),
+            this.kvSet(`task_paid:${t.id}`, '')
+          ])
+        )
       )
       await this.loadPaidStatuses()
     },
     async createTask() {
-      if (!this.taskForm.title || !this.taskForm.list_id || !this.taskForm.cost_sats) return
+      if (
+        !this.taskForm.title ||
+        !this.taskForm.list_id ||
+        !this.taskForm.cost_sats
+      )
+        return
       const newTask = {
         id: this.makeId(),
         list_id: this.taskForm.list_id,
@@ -333,7 +360,8 @@ window.app = Vue.createApp({
       this.editTaskDialog = true
     },
     async saveEditTask() {
-      if (!this.editTask || !this.editTask.title || !this.editTask.list_id) return
+      if (!this.editTask || !this.editTask.title || !this.editTask.list_id)
+        return
       const idx = this.tasks.findIndex(t => t.id === this.editTask.id)
       if (idx !== -1) {
         this.tasks.splice(idx, 1, {
@@ -342,8 +370,14 @@ window.app = Vue.createApp({
           list_id: this.editTask.list_id,
           cost_sats: Number(this.editTask.cost_sats)
         })
-        await this.kvSet(`task_cost:${this.tasks[idx].id}`, String(this.tasks[idx].cost_sats))
-        await this.kvSet(`task_list:${this.tasks[idx].id}`, String(this.tasks[idx].list_id))
+        await this.kvSet(
+          `task_cost:${this.tasks[idx].id}`,
+          String(this.tasks[idx].cost_sats)
+        )
+        await this.kvSet(
+          `task_list:${this.tasks[idx].id}`,
+          String(this.tasks[idx].list_id)
+        )
         await this.saveTasks()
       }
       this.editTaskDialog = false

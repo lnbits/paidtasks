@@ -1,8 +1,7 @@
-{% extends "base.html" %} {% from "macros.jinja" import window_vars with context %}
-{% block scripts %} {{ window_vars(user) }}
+{% extends "base.html" %} {% from "macros.jinja" import window_vars with context
+%} {% block scripts %} {{ window_vars(user) }}
 <script src="{{ static_url_for('paidtasks/static', path='js/index.js') }}"></script>
-{% endblock %}
-{% block page %}
+{% endblock %} {% block page %}
 <div class="row q-col-gutter-md">
   <div class="col-12">
     <q-card>
@@ -162,7 +161,10 @@
           no-data-label="No tasks yet"
         >
           <template v-slot:body-cell-list="props">
-            <q-td :props="props" v-text="listById[props.row.list_id] ? listById[props.row.list_id].name : '—'">
+            <q-td
+              :props="props"
+              v-text="listById[props.row.list_id] ? listById[props.row.list_id].name : '—'"
+            >
             </q-td>
           </template>
           <template v-slot:body-cell-paid="props">
@@ -204,7 +206,7 @@
 </div>
 
 <q-dialog v-model="editListDialog">
-  <q-card class="q-pa-lg lnbits__dialog-card" style="min-width: 350px;">
+  <q-card class="q-pa-lg lnbits__dialog-card" style="min-width: 350px">
     <q-card-section>
       <div class="text-h6">Edit list</div>
       <q-input
@@ -233,14 +235,19 @@
       ></q-select>
     </q-card-section>
     <q-card-actions align="right">
-      <q-btn flat color="grey" label="Cancel" @click="editListDialog = false"></q-btn>
+      <q-btn
+        flat
+        color="grey"
+        label="Cancel"
+        @click="editListDialog = false"
+      ></q-btn>
       <q-btn color="primary" label="Save" @click="saveEditList"></q-btn>
     </q-card-actions>
   </q-card>
 </q-dialog>
 
 <q-dialog v-model="editTaskDialog">
-  <q-card class="q-pa-lg lnbits__dialog-card" style="min-width: 350px;">
+  <q-card class="q-pa-lg lnbits__dialog-card" style="min-width: 350px">
     <q-card-section>
       <div class="text-h6">Edit task</div>
       <q-input
@@ -271,7 +278,12 @@
       ></q-input>
     </q-card-section>
     <q-card-actions align="right">
-      <q-btn flat color="grey" label="Cancel" @click="editTaskDialog = false"></q-btn>
+      <q-btn
+        flat
+        color="grey"
+        label="Cancel"
+        @click="editTaskDialog = false"
+      ></q-btn>
       <q-btn color="primary" label="Save" @click="saveEditTask"></q-btn>
     </q-card-actions>
   </q-card>
