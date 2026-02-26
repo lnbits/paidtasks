@@ -1,6 +1,8 @@
 # PaidTasks (WASM)
 
-PaidTasks is a WASM-only extension that lets users create paid task lists with a public page per list.
+This is an example WASM extension you can use as a base to vibe code an extension that can be shared safely.
+
+PaidTasks is an extension to share a list of tasks and have people pay you to complete the tasks.
 
 ## Key Files
 
@@ -20,7 +22,7 @@ This extension uses the tag `paidtasks`. Users must grant it in the permissions 
 
 ## Agent Guidance
 
-Use `docs/devs/agents_wasm_extensions.md` for AI/agent instructions.
+Use `lnbits/extensions/wasm/docs/agents_wasm_extensions.md` for AI/agent instructions.
 
 ## Test Checklist
 
@@ -30,4 +32,3 @@ Use `docs/devs/agents_wasm_extensions.md` for AI/agent instructions.
 4. Pay the invoice and verify:
    - Task is marked paid.
    - Public page updates via websocket.
-   - KV `task_paid:<id>` is set.

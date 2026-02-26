@@ -20,7 +20,7 @@
             <q-item-section side>
               <q-btn
                 color="primary"
-                label="Pay"
+                :label="paidMap[task.id] ? 'Already paid' : 'Pay'"
                 @click="openInvoice(task)"
                 :disable="paidMap[task.id]"
               ></q-btn>
@@ -74,10 +74,11 @@
         listDescription: '',
         tasks: [],
         paidMap: {},
-        paidSockets: {},
+        tasksSocket: null,
         showInvoice: false,
         invoice: null,
-        invoiceWs: null
+        invoiceWs: null,
+        activeTaskId: null
       }
     },
     methods: {
@@ -119,35 +120,51 @@
           this.listTitle = list.name
           this.listDescription = list.description
         }
-        this.tasks = tasks.filter(t => t.list_id === listId || String(t.list_id) === String(listIdRaw))
-        this.connectPaidSockets()
+        this.tasks = tasks.filter(
+          t => t.list_id === listId || String(t.list_id) === String(listIdRaw)
+        )
+        this.paidMap = this.tasks.reduce((acc, task) => {
+          if (task && task.paid) acc[task.id] = true
+          return acc
+        }, {})
+        this.connectTasksSocket()
       },
-      connectPaidSockets() {
-        Object.values(this.paidSockets).forEach(ws => {
+      connectTasksSocket() {
+        if (this.tasksSocket) {
+          try {
+            this.tasksSocket.close()
+          } catch {}
+        }
+        const url = new URL(window.location)
+        url.protocol = url.protocol === 'https:' ? 'wss' : 'ws'
+        url.pathname = `/api/v1/ws/${EXT_ID}:public_tasks`
+        const ws = new WebSocket(url)
+        this.tasksSocket = ws
+        ws.addEventListener('message', ({data}) => {
+          try {
+            const parsed = JSON.parse(data)
+            if (Array.isArray(parsed)) {
+              const tasks = parsed.filter(
+                t => t.list_id === listId || String(t.list_id) === String(listIdRaw)
+              )
+              this.tasks = tasks
+              this.paidMap = tasks.reduce((acc, task) => {
+                if (task && task.paid) acc[task.id] = true
+                return acc
+              }, {})
+            }
+          } catch {}
+        })
+        ws.addEventListener('error', () => {
           try {
             ws.close()
           } catch {}
-        })
-        this.paidSockets = {}
-        this.tasks.forEach(task => {
-          const url = new URL(window.location)
-          url.protocol = url.protocol === 'https:' ? 'wss' : 'ws'
-          url.pathname = `/api/v1/ws/paidtasks:task_paid:${task.id}`
-          const ws = new WebSocket(url)
-          this.paidSockets[task.id] = ws
-          ws.addEventListener('message', () => {
-            this.paidMap = {...this.paidMap, [task.id]: true}
-          })
-          ws.addEventListener('error', () => {
-            try {
-              ws.close()
-            } catch {}
-          })
         })
       },
       async openInvoice(task) {
         this.showInvoice = true
         this.invoice = null
+        this.activeTaskId = task?.id ?? null
         const tag = 'paidtasks'
         try {
           const res = await fetch(`/${EXT_ID}/api/v1/public/call/public_create_invoice`, {
@@ -158,7 +175,21 @@
                 watch: {
                   store_key: `task_paid:${task.id}`,
                   tag,
-                  handler: 'noop'
+                  handler: 'noop',
+                  list_updates: [
+                    {
+                      key: 'public_tasks',
+                      id: String(task.id),
+                      field: 'paid',
+                      value: true
+                    },
+                    {
+                      key: 'tasks',
+                      id: String(task.id),
+                      field: 'paid',
+                      value: true
+                    }
+                  ]
                 }
               })
           })
@@ -200,6 +231,9 @@
             ws.close()
             this.invoiceWs = null
             this.showInvoice = false
+            if (this.activeTaskId) {
+              this.paidMap = {...this.paidMap, [this.activeTaskId]: true}
+            }
             Quasar.Notify.create({type: 'positive', message: 'Payment received'})
           }
         })

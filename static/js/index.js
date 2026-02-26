@@ -9,7 +9,7 @@ window.app = Vue.createApp({
       lists: [],
       tasks: [],
       paidMap: {},
-      paidSockets: {},
+      tasksSocket: null,
       listForm: {
         name: '',
         description: '',
@@ -79,11 +79,20 @@ window.app = Vue.createApp({
   },
   methods: {
     makeId() {
-      const base = Math.floor(Date.now() / 1000)
-      const extra = Math.floor(Math.random() * 1000)
-      return base * 1000 + extra
+      if (window.crypto && window.crypto.randomUUID) {
+        return window.crypto.randomUUID()
+      }
+      return `pt_${Date.now()}_${Math.floor(Math.random() * 1e9)}`
     },
     isSafeId(value) {
+      if (typeof value === 'string') {
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+          return true
+        }
+        if (/^pt_[0-9]+_[0-9]+$/.test(value)) {
+          return true
+        }
+      }
       const num = Number(value)
       return Number.isInteger(num) && num > 0 && num < 2147483647
     },
@@ -127,7 +136,8 @@ window.app = Vue.createApp({
           await Promise.all([
             this.kvSet(`task_cost:${oldId}`, ''),
             this.kvSet(`task_list:${oldId}`, ''),
-            this.kvSet(`task_paid:${oldId}`, '')
+            this.kvSet(`task_cost:${oldId}`, ''),
+            this.kvSet(`task_list:${oldId}`, '')
           ])
         }
       }
@@ -216,37 +226,37 @@ window.app = Vue.createApp({
         })
       )
     },
-    async loadPaidStatuses() {
-      const paidMap = {}
-      await Promise.all(
-        this.tasks.map(async task => {
-          const value = await this.kvGet(`task_paid:${task.id}`)
-          paidMap[task.id] = value !== null
-        })
-      )
-      this.paidMap = paidMap
+    refreshPaidMap() {
+      const map = {}
+      for (const task of this.tasks) {
+        map[task.id] = Boolean(task.paid)
+      }
+      this.paidMap = map
     },
-    connectPaidSockets() {
-      Object.values(this.paidSockets).forEach(ws => {
+    connectTasksSocket() {
+      if (this.tasksSocket) {
+        try {
+          this.tasksSocket.close()
+        } catch {}
+      }
+      const url = new URL(window.location)
+      url.protocol = url.protocol === 'https:' ? 'wss' : 'ws'
+      url.pathname = `/api/v1/ws/${EXT_ID}:tasks`
+      const ws = new WebSocket(url)
+      this.tasksSocket = ws
+      ws.addEventListener('message', ({data}) => {
+        try {
+          const parsed = JSON.parse(data)
+          if (Array.isArray(parsed)) {
+            this.tasks = parsed
+            this.refreshPaidMap()
+          }
+        } catch {}
+      })
+      ws.addEventListener('error', () => {
         try {
           ws.close()
         } catch {}
-      })
-      this.paidSockets = {}
-      this.tasks.forEach(task => {
-        const url = new URL(window.location)
-        url.protocol = url.protocol === 'https:' ? 'wss' : 'ws'
-        url.pathname = `/api/v1/ws/${EXT_ID}:task_paid:${task.id}`
-        const ws = new WebSocket(url)
-        this.paidSockets[task.id] = ws
-        ws.addEventListener('message', () => {
-          this.paidMap = {...this.paidMap, [task.id]: true}
-        })
-        ws.addEventListener('error', () => {
-          try {
-            ws.close()
-          } catch {}
-        })
       })
     },
     async saveLists() {
@@ -263,8 +273,10 @@ window.app = Vue.createApp({
     },
     async createList() {
       if (!this.listForm.name || !this.listForm.wallet_id) return
+      const newId = await this.generateId()
+      if (!newId) return
       const newList = {
-        id: this.makeId(),
+        id: newId,
         name: this.listForm.name.trim(),
         description: this.listForm.description.trim(),
         created_at: new Date().toISOString(),
@@ -327,12 +339,11 @@ window.app = Vue.createApp({
         removedTasks.map(t =>
           Promise.all([
             this.kvSet(`task_cost:${t.id}`, ''),
-            this.kvSet(`task_list:${t.id}`, ''),
-            this.kvSet(`task_paid:${t.id}`, '')
+            this.kvSet(`task_list:${t.id}`, '')
           ])
         )
       )
-      await this.loadPaidStatuses()
+      this.refreshPaidMap()
     },
     async createTask() {
       if (
@@ -341,12 +352,15 @@ window.app = Vue.createApp({
         !this.taskForm.cost_sats
       )
         return
+      const newId = await this.generateId()
+      if (!newId) return
       const newTask = {
-        id: this.makeId(),
+        id: newId,
         list_id: this.taskForm.list_id,
         title: this.taskForm.title.trim(),
         cost_sats: Number(this.taskForm.cost_sats),
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        paid: false
       }
       this.tasks = [newTask, ...this.tasks]
       this.taskForm.title = ''
@@ -395,18 +409,17 @@ window.app = Vue.createApp({
       await this.saveTasks()
       await Promise.all([
         this.kvSet(`task_cost:${task.id}`, ''),
-        this.kvSet(`task_list:${task.id}`, ''),
-        this.kvSet(`task_paid:${task.id}`, '')
+        this.kvSet(`task_list:${task.id}`, '')
       ])
-      await this.loadPaidStatuses()
+      this.refreshPaidMap()
     },
     async loadAll() {
       if (!this.walletKey) return
       this.loading = true
       try {
         await this.loadListsAndTasks()
-        await this.loadPaidStatuses()
-        this.connectPaidSockets()
+        this.refreshPaidMap()
+        this.connectTasksSocket()
         await this.ensureTagWatch()
       } catch (err) {
         LNbits.utils.notifyApiError(err)
@@ -426,12 +439,30 @@ window.app = Vue.createApp({
             tag: 'paidtasks',
             wallet_id: wallet.value,
             handler: 'noop',
-            store_key: 'tag:paidtasks:last_payment'
+            store_key: 'task_event:last_payment'
           }
         )
       } catch (err) {
         // ignore if not permitted or not granted yet
       }
+    },
+    async generateId() {
+      try {
+        const res = await fetch(`/${EXT_ID}/api/v1/call/generate_id`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.walletKey}`
+          },
+          body: JSON.stringify({})
+        })
+        if (!res.ok) return this.makeId()
+        const data = await res.json()
+        if (data && data.id) return data.id
+      } catch (err) {
+        return this.makeId()
+      }
+      return this.makeId()
     }
   },
   watch: {},

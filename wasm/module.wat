@@ -100,7 +100,7 @@
     local.get $task_len
     i32.add
     i32.const 740
-    i32.const 32
+    i32.const 64
     call $db_get
     local.set $list_len
     local.get $list_len
