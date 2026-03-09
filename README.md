@@ -24,6 +24,22 @@ This extension uses the tag `paidtasks`. Users must grant it in the permissions 
 
 Use `lnbits/extensions/wasm/docs/agents_wasm_extensions.md` for AI/agent instructions.
 
+### AI Prompt (Copy-Paste)
+
+```
+You are building a LNbits WASM extension. First read:
+extensions/wasm/docs/agents_wasm_extensions.md
+
+Rules:
+- Only edit files under lnbits/extensions/<ext_id>/.
+- Use extensions/paidtasks as a base template.
+- Any internal endpoint access must be declared in config.json permissions.
+- For POST /api/v1/payments you must set "out" explicitly and declare policy.payments_out.
+- Use <lnbits server>/openapi.json as the API reference.
+
+Goal: <describe extension behavior>.
+```
+
 ## Test Checklist
 
 1. Enable extension and grant permissions + `paidtasks` tag.
