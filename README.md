@@ -13,7 +13,7 @@ PaidTasks is an extension to share a list of tasks and have people pay you to co
 ## Permissions (Current)
 
 - `ext.db.read_write`
-- `api.POST:/api/v1/payments`
+- `api.POST:/api/v1/payments` (policy: create-only, `payments_out: false`)
 - `ext.payments.watch`
 
 ## Payment Tags

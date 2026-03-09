@@ -27,8 +27,9 @@
     },
     {
       "id": "api.POST:/api/v1/payments",
-      "label": "Create or pay invoices",
-      "description": "Call POST /api/v1/payments to create or pay invoices."
+      "label": "Create invoices",
+      "description": "Call POST /api/v1/payments to create invoices only.",
+      "policy": {"payments_out": false}
     },
     {
       "id": "ext.payments.watch",
